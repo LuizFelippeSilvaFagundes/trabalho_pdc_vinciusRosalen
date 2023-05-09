@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
 
 namespace AstrologiaAPI.Controllers
 {
@@ -94,6 +97,7 @@ namespace AstrologiaAPI.Controllers
             return NotFound(); // Retorna 404 se o cliente não for encontrado
         }
 
+
         [HttpPut("cliente/{nickname}/plano")]
         public ActionResult<string> AtualizarPlano(string nickname, [FromBody] string novoPlano)
         {
@@ -112,18 +116,63 @@ namespace AstrologiaAPI.Controllers
 
         private string ObterNumeroBicho()
         {
-            // falta Implementar a lógica para obter o número do bicho do dia
-            // Pode ser uma consulta a uma fonte externa ou uma lógica interna da aplicação
-            return "123"; // Exemplo de número do bicho
+
+            // Obtém o dia do ano atual
+            int diaDoAno = DateTime.Now.DayOfYear;
+
+            // Realiza algum cálculo ou lógica para determinar o número do bicho com base no dia do ano
+            int numeroBicho = (diaDoAno % 10) + 1;
+
+            return numeroBicho.ToString();
+
         }
 
         private Cliente? ObterClienteLogado()
         {
-            // falta a lógica para obter o cliente logado
-            // Pode ser por meio de autenticação e autorização na API
-            // Retornar o cliente correspondente ao usuário autenticado ou null se não estiver logado
-            // Você pode acessar a informação do cliente a partir de uma sessão ou token de autenticação
-            return null; // Exemplo: nenhum cliente logado
+                // Obtém o token de autenticação do cabeçalho da requisição
+                string token = Request.Headers["Authorization"];
+
+                if (!string.IsNullOrEmpty(token))
+                {
+                    // validação e decodificação do token JWT para obter as informações do cliente
+                    var handler = new JwtSecurityTokenHandler();
+
+                    try
+                    {
+                        var claimsPrincipal = handler.ValidateToken(token, new TokenValidationParameters
+                        {
+                            ValidateIssuerSigningKey = true,
+                            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("chave-secreta")),
+                            ValidateIssuer = false,
+                            ValidateAudience = false
+                        }, out var validatedToken);
+
+                        // Verifica se o token é válido e se contém as informações necessárias
+                        if (validatedToken is JwtSecurityToken jwtSecurityToken && jwtSecurityToken.Claims.Any())
+                        {
+                            // Recupera as informações do cliente do token
+                            var nickname = jwtSecurityToken.Claims.FirstOrDefault(c => c.Type == "nickname")?.Value;
+
+                            if (!string.IsNullOrEmpty(nickname))
+                            {
+                                // Encontra o cliente correspondente ao nickname
+                                var clienteEncontrado = clientes.FirstOrDefault(c => string.Equals(c.Nickname, nickname, StringComparison.OrdinalIgnoreCase));
+
+                                if (clienteEncontrado != null)
+                                {
+                                    return clienteEncontrado;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Tratar erros na validação do token, caso necessário
+
+                    }
+                }
+                return null; // Nenhum cliente logado ou token inválido
+            }
         }
     }
-}
+
